@@ -1,0 +1,192 @@
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="./assets/css/bootstrap.min.css" />
+    <style>
+        @font-face {
+            font-family: 'Main Font';
+            src: url('./assets/fonts/Louis\ George\ Cafe\ Bold.ttf') format('truetype');
+        }
+
+        #main{
+            position:absolute;
+            top:50%;
+            transform:translateY(-50%);
+        }
+    
+        #chord{
+            font-size:5rem;
+        }
+
+        #button{
+            color:white;
+        }
+
+        #button[role="start"]{
+            background-color:#157347;
+            border-color: #157347;
+        }
+        
+        #button[role="stop"]{
+            background-color: #BB2D3B;
+            border-color: #BB2D3B;
+        }
+        @media screen and (max-width:768px){
+            .capsule-chords{
+                margin:auto;
+                display: inline-grid;
+            }
+            .chords-group{
+                display:block;
+                text-align:left;
+            }
+        }
+        
+    </style>
+</head>
+
+<body>
+    <div id="main" class=" w-100 text-center">
+        <div class="col-12 ">
+            <div class="capsule-chords mb-3">
+                <div class="chords-group d-inline-block pe-lg-5 ">
+                    <div class="chord-group">
+                        <input type="checkbox" id="chords_M" class="chords" />
+                        <label for="chords_M">Major acords included</label>
+                    </div>
+                    <div class="chord-group">
+                        <input type="checkbox" id="chords_m" class="chords" />
+                        <label for="chords_m">minör acords included</label>
+                    </div>
+                </div>
+                <div class="chords-group  d-inline-block">
+                    <div class="chord-group">
+                        <input type="checkbox" id="chords_Maj7" class="chords" />
+                        <label for="chords_Maj7">Maj7 acords included</label>
+                    </div>
+                    <div class="chord-group">
+                        <input type="checkbox" id="chords_m7" class="chords" />
+                        <label for="chords_m7">min7 acords included</label>
+                    </div>
+                </div>
+
+            </div>
+            <h1 id="chord" class="w-100 d-block mb-3">Chords</h1>
+            <div class="w-100 d-block">
+                <div class="w-100 mb-3">
+                    <select id="select_seconds" class="border">
+                        <option value="1">1 Second</option>
+                        <option value="2">2 Second</option>
+                        <option value="3">3 Second</option>
+                        <option value="4">4 Second</option>
+                        <option value="5">5 Second</option>
+                        <option value="6">6 Second</option>
+                        <option value="7">7 Second</option>
+                        <option value="8">8 Second</option>
+                        <option value="9">9 Second</option>
+                        <option value="10">10 Second</option>
+                    </select>
+                    <span>:</span>
+                    <span id="seconds">0</span>
+                </div>
+            </div>
+            <div class="btn " id="button" role="start">Start</div>
+
+        </div>
+    </div>
+
+    <script src="./assets/js/jquery-3.6.0.min.js"></script>
+    <script src="./assets/js/bootstrap.min.js"></script>
+    <script>
+        var _status = false, seconds = 1, seconds_max = 0;
+        var _invertal_chord, _invertal_seconds;
+
+        var chords_array = [];
+        var chords_M = ["C", "D", "E", "F", "G", "A", "B"];
+        var chords_m = ["Cm", "Dm", "Em", "Fm", "Gm", "Am", "Bm"];
+        var chords_Maj7 = ["Cmaj7", "Dmaj7", "Emaj7", "Fmaj7", "Gmaj7", "Amaj7", "Bmaj7"];
+        var chords_m7 = ["Cm7", "Dm7", "Em7", "Fm7", "Gm7", "Am7", "Bm7"];
+
+        var audioElement = document.createElement('audio');
+
+        $("#button").click(function () {
+            var _this = $(this);
+            var text_chord = $("#chord");
+            var text_seconds = $("#seconds");
+
+            chords_array=[];
+
+            $.each($(".chords"), function (key, item) {
+                if ($(item).is(':checked')) {
+                    chords_array.push(window[$(item).attr("id")]);
+                }
+            });
+           
+            if (chords_array.length == 0) {
+                alert('No chords have been selected.');
+                return false;
+            }
+
+            if (!_status) {
+                $("#select_seconds, .chords").prop("disabled", true);
+                var select_chord = randChords($(text_chord).text());
+                var _start = false;
+                _status = true;
+                $(_this).attr("role", "stop").text("Stop");
+
+
+                _invertal_seconds = setInterval(function () {
+                    $(text_chord).text(select_chord);
+                    if (seconds == 1) {
+                        audioElement.setAttribute('src', './assets/media/chords/' + select_chord + '.mp3');
+                        audioElement.play();
+                    } else if (seconds > parseInt($("#select_seconds").val())) {
+                        seconds = 1;
+                    }
+                    $(text_seconds).text(seconds);
+                    seconds += 1;
+                    if (!_start) {
+                        _start = true;
+                        _invertal_chord = setInterval(function () {
+                            select_chord = randChords($(text_chord).text());
+                            $(text_chord).text(select_chord);
+                            audioElement.setAttribute('src', './assets/media/chords/' + select_chord + '.mp3');
+                            audioElement.play();
+                        }, (parseInt($("#select_seconds").val())) * 1000);
+                    }
+                }, 1000);
+
+
+            } else {
+                _status = false;
+                seconds = 1;
+                $(text_chord).text("Chords");
+                $(text_seconds).text(seconds);
+                $(_this).attr("role", "start").text("Start");
+                $("#select_seconds, .chords").prop("disabled", false);
+                clearInterval(_invertal_chord);
+                clearInterval(_invertal_seconds);
+            }
+
+
+        });
+
+        function randChords(now_chord) {
+            var chords_rand = Math.floor((Math.random() * chords_array.length) + 0);
+            var chords_select = chords_array[chords_rand];
+            var chord_rand = Math.floor((Math.random() * chords_select.length) + 0);
+            var chord_select = chords_select[chord_rand];
+            while (now_chord == chord_select) {
+                chord_select = randChords(now_chord);
+            }
+            return chord_select;
+        }
+
+
+    </script>
+</body>
+
+
+</html>
