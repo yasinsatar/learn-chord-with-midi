@@ -70,5 +70,5 @@ function noteOff(note) {
 
 
 function failure(){
-    console.log('Could not connect MIDI');
+    document.getElementById('device').textContent = 'Could not connect MIDI';
 }
