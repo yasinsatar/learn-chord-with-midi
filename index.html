@@ -1,280 +1,652 @@
-<html>
-  <hename>
+<!doctype html>
+<html lang="en">
+  <head>
     <meta charset="UTF-8" />
-    <title>Learn Chord with MIDI</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="stylesheet" href="./assets/css/bootstrap.min.css" />
-    <link rel="icon" type="image/x-icon" href="./assets/media/favicon.ico" />
+    <title>Vue.js & Web Audio API MIDI Keyboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Vue.js 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- Tonal.js (Music Theory Library) -->
+    <script src="https://cdn.jsdelivr.net/npm/tonal/browser/tonal.min.js"></script>
     <style>
-      @font-face {
-        font-family: "Main Font";
-        src: url("./assets/fonts/Louis\ George\ Cafe\ Bold.ttf")
-          format("truetype");
+      /* UI and animation styles */
+      body {
+        font-family: 'Inter', sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
       }
-
-      #main {
-        position: absolute;
-        top: 50%;
-        transform: translateY(-50%);
+      .keyboard-wrapper {
+        position: relative;
+        width: 100%;
+        border: 2px solid #334155;
+        border-radius: 8px;
+        background-color: #1e293b;
+        padding: 1rem;
+        box-shadow:
+          0 10px 15px -3px rgba(0, 0, 0, 0.1),
+          0 4px 6px -2px rgba(0, 0, 0, 0.05);
       }
-
-      #chord {
+      .keyboard-container {
+        position: relative;
+        width: 100%;
+      }
+      .key {
+        cursor: pointer;
+        transition: all 0.07s ease;
+        position: absolute; /* All keys are absolutely positioned */
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        padding-bottom: 8px;
+        font-weight: 500;
+        user-select: none;
+        box-sizing: border-box;
+      }
+      .key.white {
+        background-color: #f8fafc;
+        border: 1px solid #94a3b8;
+        border-radius: 0 0 5px 5px;
+        color: #475569;
+        z-index: 1;
+      }
+      .key.white.pressed {
+        background-color: #67e8f9;
+        transform: translateY(2px);
+        box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.2);
+      }
+      .key.black {
+        background: linear-gradient(45deg, #262626, #404040);
+        border: 1px solid #171717;
+        border-radius: 0 0 4px 4px;
+        color: #e2e8f0;
+        z-index: 2;
+        box-shadow:
+          -1px -1px 2px rgba(255, 255, 255, 0.2) inset,
+          0 -5px 2px 3px rgba(0, 0, 0, 0.6) inset,
+          0 2px 4px rgba(0, 0, 0, 0.5);
+      }
+      .key.black.pressed {
+        background: linear-gradient(45deg, #171717, #262626);
+        box-shadow:
+          -1px -1px 2px rgba(255, 255, 255, 0.2) inset,
+          0 -2px 2px 3px rgba(0, 0, 0, 0.6) inset,
+          0 1px 2px rgba(0, 0, 0, 0.5);
+        transform: translateY(1px);
+      }
+      .note-name {
+        font-size: 0.8rem;
+      }
+      .chord-display {
+        font-size: 3rem;
+        font-weight: 700;
+        text-shadow: 0 0 15px rgba(125, 211, 252, 0.5);
+      }
+      .target-chord-display {
         font-size: 5rem;
-      }
-
-      #notes{
-        font-size: 2rem;
-      }
-
-      #button {
-        color: white;
-      }
-
-      #button[role="start"] {
-        background-color: #157347;
-        border-color: #157347;
-      }
-
-      #button[role="stop"] {
-        background-color: #bb2d3b;
-        border-color: #bb2d3b;
-      }
-
-      #active_notes {
-        display: block;
-        height: 25px;
-      }
-
-      @media screen and (max-width: 768px) {
-        .capsule-chords {
-          margin: auto;
-          display: inline-grid;
-        }
-        .chords-group {
-          display: block;
-          text-align: left;
-        }
+        font-weight: 800;
+        color: #f0f9ff;
       }
     </style>
-  </hename>
+  </head>
+  <body class="bg-slate-900 text-slate-200 flex items-center justify-center min-h-screen p-4">
+    <div id="app" class="w-full max-w-7xl mx-auto text-center">
+      <div class="mb-8">
+        <h1 class="text-4xl font-bold text-sky-400">Vue & Web Audio API MIDI Keyboard</h1>
+        <p class="text-slate-400 mt-2">
+          Connect your MIDI keyboard, set the number of keys, and start playing.
+        </p>
+      </div>
 
-  <body>
-    <div id="main" class="w-100 text-center">
-      <div class="col-12">
-        <div class="w-100 text-center d-inline-block mb-5">
-          <span>MIDI: </span
-          ><span id="device" class="fw-bold"
-            >Please press any key in midi keyboard</span
+      <!-- Setup Panel -->
+      <div v-if="!isInitialized" class="mb-6 space-y-4">
+        <div class="flex items-center justify-center gap-4">
+          <label for="midiDevice" class="font-medium">MIDI Device:</label>
+          <select
+            v-model="selectedMidiInputId"
+            @change="onDeviceSelected"
+            id="midiDevice"
+            class="p-2 rounded-md bg-slate-700 text-white border border-slate-600 focus:ring-2 focus:ring-sky-500 focus:outline-none"
           >
+            <option :value="null" disabled>-- Select a device --</option>
+            <option v-for="input in midiInputs" :key="input.id" :value="input.id">
+              {{ input.name }}
+            </option>
+          </select>
         </div>
-        <div class="capsule-chords mb-3">
-          <div class="chords-group d-inline-block pe-lg-5">
-            <div class="chord-group">
-              <input type="checkbox" id="chords_M" class="chords" />
-              <label for="chords_M">Major acords included</label>
-            </div>
-            <div class="chord-group">
-              <input type="checkbox" id="chords_m" class="chords" />
-              <label for="chords_m">minör acords included</label>
+
+        <!-- Calibration Step -->
+        <div
+          v-if="selectedMidiInputId"
+          class="mt-4 p-3 rounded-md transition-colors duration-300"
+          :class="isCalibrated ? 'bg-green-900 text-green-200' : 'bg-sky-900 text-sky-200'"
+        >
+          <p>{{ calibrationMessage }}</p>
+        </div>
+
+        <div class="flex items-center justify-center gap-4 mt-4">
+          <label for="keyCount" class="font-medium">Number of Keys:</label>
+          <input
+            type="number"
+            v-model.number="numberOfKeys"
+            min="25"
+            max="88"
+            id="keyCount"
+            class="w-24 p-2 rounded-md bg-slate-700 text-white border border-slate-600 focus:ring-2 focus:ring-sky-500 focus:outline-none"
+          />
+        </div>
+        <div class="mt-4">
+          <button
+            @click="start"
+            :disabled="!selectedMidiInputId || !isCalibrated"
+            class="px-6 py-2 bg-sky-600 hover:bg-sky-700 rounded-md font-semibold transition-colors shadow-lg disabled:bg-slate-600 disabled:cursor-not-allowed"
+          >
+            Start
+          </button>
+        </div>
+      </div>
+
+      <!-- Training Area -->
+      <div
+        v-if="isInitialized"
+        class="p-4 border-2 border-slate-700 rounded-lg mb-8 bg-slate-800/50"
+      >
+        <h2 class="text-2xl font-bold text-sky-400 mb-4">Chord Training</h2>
+        <div class="flex flex-wrap items-center justify-center gap-x-6 gap-y-4 mb-4">
+          <div class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              v-model="chordTypeSelection.M"
+              id="major"
+              class="h-4 w-4 rounded"
+              :disabled="isGameRunning"
+            />
+            <label for="major" :class="{'opacity-50': isGameRunning}">Major</label>
+          </div>
+          <div class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              v-model="chordTypeSelection.m"
+              id="minor"
+              class="h-4 w-4 rounded"
+              :disabled="isGameRunning"
+            />
+            <label for="minor" :class="{'opacity-50': isGameRunning}">Minor</label>
+          </div>
+          <div class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              v-model="chordTypeSelection.maj7"
+              id="maj7"
+              class="h-4 w-4 rounded"
+              :disabled="isGameRunning"
+            />
+            <label for="maj7" :class="{'opacity-50': isGameRunning}">Major 7</label>
+          </div>
+          <div class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              v-model="chordTypeSelection.m7"
+              id="min7"
+              class="h-4 w-4 rounded"
+              :disabled="isGameRunning"
+            />
+            <label for="min7" :class="{'opacity-50': isGameRunning}">Minor 7</label>
+          </div>
+        </div>
+        <div class="flex items-center justify-center gap-x-6 gap-y-2 mb-4">
+            <span class="font-medium text-slate-300" :class="{'opacity-50': isGameRunning}">Notation:</span>
+            <label class="flex items-center gap-2" :class="isGameRunning ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'">
+                <input type="radio" v-model="notationPreference" value="flats" name="notation" class="h-4 w-4 text-sky-600 bg-slate-700 border-slate-500 focus:ring-sky-500" :disabled="isGameRunning">
+                <span>Flats (b)</span>
+            </label>
+            <label class="flex items-center gap-2" :class="isGameRunning ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'">
+                <input type="radio" v-model="notationPreference" value="sharps" name="notation" class="h-4 w-4 text-sky-600 bg-slate-700 border-slate-500 focus:ring-sky-500" :disabled="isGameRunning">
+                <span>Sharps (#)</span>
+            </label>
+        </div>
+        <div class="flex items-center justify-center gap-4">
+          <label for="timerDuration">Duration (sec):</label>
+          <select
+            v-model.number="gameDuration"
+            id="timerDuration"
+            :disabled="isGameRunning"
+            class="p-2 rounded-md bg-slate-700 text-white"
+          >
+            <option v-for="n in 10" :value="n">{{ n }}</option>
+          </select>
+          <button
+            @click="toggleGame"
+            class="px-6 py-2 rounded-md font-semibold transition-colors"
+            :class="isGameRunning ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'"
+          >
+            {{ isGameRunning ? 'Stop' : 'Start Training' }}
+          </button>
+        </div>
+        <div v-if="isGameRunning" class="mt-4">
+          <p class="text-lg">Target Chord:</p>
+          <p class="target-chord-display">{{ targetChord }}</p>
+          <p class="text-2xl font-mono">{{ gameCountdown }}</p>
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <p class="text-lg">
+          MIDI Status:
+          <span :class="midiStatus.connected ? 'text-green-400' : 'text-yellow-400'"
+            >{{ midiStatus.message }}</span
+          >
+        </p>
+      </div>
+
+      <div class="mb-8 flex items-center justify-center h-24">
+        <p class="chord-display transition-colors duration-300" :class="userChordColorClass">
+          {{ detectedChord }}
+        </p>
+      </div>
+
+      <div class="w-full pb-4">
+        <div class="keyboard-wrapper" ref="keyboardWrapper">
+          <div
+            v-if="keyboardKeys.length > 0"
+            class="keyboard-container"
+            :style="{ height: keyboardHeight + 'px' }"
+          >
+            <div
+              v-for="key in keyboardKeys"
+              :key="key.midi"
+              :class="['key', key.type, { 'pressed': key.isPressed }]"
+              :style="key.styleObject"
+              @mousedown="playNoteFromClick(key.midi, 100)"
+              @mouseup="stopNoteFromClick(key.midi)"
+              @mouseleave="stopNoteFromClick(key.midi)"
+            >
+              <span class="note-name" v-if="key.type === 'white'"
+                >{{ Tonal.Midi.midiToNoteName(key.midi, { pitchClass: true, sharps: notationPreference === 'sharps' }) }}</span
+              >
             </div>
           </div>
-          <div class="chords-group d-inline-block">
-            <div class="chord-group">
-              <input type="checkbox" id="chords_Maj7" class="chords" />
-              <label for="chords_Maj7">Maj7 acords included</label>
-            </div>
-            <div class="chord-group">
-              <input type="checkbox" id="chords_m7" class="chords" />
-              <label for="chords_m7">min7 acords included</label>
-            </div>
-          </div>
         </div>
-        <div class="d-block">
-        <h1 id="chord" class="w-100 d-inline mb-3">Random Chord</h1>
-        <span id="notes" class="d-inline"></span>
+        <div v-if="!isInitialized" class="text-slate-500 mt-4">
+          Select a MIDI device and click 'Start' to build the keyboard.
         </div>
-        <div class="d-block my-2">Pressed Notes: <span id="active_notes" class="d-inline"></span></div>
-        <div class="w-100 d-block">
-          <div class="w-100 mb-3">
-            <select id="select_seconds" class="border">
-              <option value="1">1 Second</option>
-              <option value="2">2 Second</option>
-              <option value="3">3 Second</option>
-              <option value="4">4 Second</option>
-              <option value="5">5 Second</option>
-              <option value="6">6 Second</option>
-              <option value="7">7 Second</option>
-              <option value="8">8 Second</option>
-              <option value="9">9 Second</option>
-              <option value="10">10 Second</option>
-            </select>
-            <span>:</span>
-            <span id="seconds">0</span>
-          </div>
-        </div>
-        <div class="btn" id="button" role="start">Start</div>
       </div>
     </div>
 
-    <script src="./assets/js/jquery-3.6.0.min.js"></script>
-    <script src="./assets/js/bootstrap.min.js"></script>
     <script>
-      var _status = false,
-        seconds = 0,
-        seconds_max = 0;
-      var _invertal_chord, _invertal_seconds;
+      document.addEventListener('DOMContentLoaded', () => {
+        const { createApp } = Vue
 
-      var random_chord =  { name: "", notes: [] };
-      var chords_array = [];
-      
-      var chords_M = [
-        { name: "C Major", notes: ["C", "E", "G"] },
-        { name: "C# Major", notes: ["C#", "F", "G#"] },
-        { name: "D Major", notes: ["D", "F#", "A"] },
-        { name: "D# Major", notes: ["D#", "G", "A#"] },
-        { name: "E Major", notes: ["E", "G#", "B"] },
-        { name: "F Major", notes: ["F", "A", "C"] },
-        { name: "F# Major", notes: ["F#", "A#", "C#"] },
-        { name: "G Major", notes: ["G", "B", "D"] },
-        { name: "G# Major", notes: ["G#", "C", "D#"] },
-        { name: "A Major", notes: ["A", "C#", "E"] },
-        { name: "A# Major", notes: ["A#", "D", "F"] },
-        { name: "B Major", notes: ["B", "D#", "F#"] },
-      ];
-
-      var chords_m = [
-        { name: "C Minor", notes: ["C", "D#", "G"] },
-        { name: "C# Minor", notes: ["C#", "E", "G#"] },
-        { name: "D Minor", notes: ["D", "F", "A"] },
-        { name: "D# Minor", notes: ["D#", "F#", "A#"] },
-        { name: "E Minor", notes: ["E", "G", "B"] },
-        { name: "F Minor", notes: ["F", "G#", "C"] },
-        { name: "F# Minor", notes: ["F#", "A", "C#"] },
-        { name: "G Minor", notes: ["G", "A#", "D"] },
-        { name: "G# Minor", notes: ["G#", "B", "D#"] },
-        { name: "A Minor", notes: ["A", "C", "E"] },
-        { name: "A# Minor", notes: ["A#", "C#", "F"] },
-        { name: "B Minor", notes: ["B", "D", "F#"] },
-      ];
-
-      var chords_Maj7 = [
-        { name: "C Major7", notes: ["C", "E", "G", "B"] },
-        { name: "C# Major7", notes: ["C#", "F", "G#", "C"] },
-        { name: "D Major7", notes: ["D", "F#", "A", "C#"] },
-        { name: "D# Major7", notes: ["D#", "G", "A#", "D"] },
-        { name: "E Major7", notes: ["E", "G#", "B", "D#"] },
-        { name: "F Major7", notes: ["F", "A", "C", "E"] },
-        { name: "F# Major7", notes: ["F#", "A#", "C#", "F"] },
-        { name: "G Major7", notes: ["G", "B", "D", "F#"] },
-        { name: "G# Major7", notes: ["G#", "C", "D#", "G"] },
-        { name: "A Major7", notes: ["A", "C#", "E", "G#"] },
-        { name: "A# Major7", notes: ["A#", "D", "F", "A"] },
-        { name: "B Major7", notes: ["B", "D#", "F#", "A#"] },
-      ];
-
-      var chords_m7 = [
-        { name: "C Minor7", notes: ["C", "D#", "G", "A#"] },
-        { name: "C# Minor7", notes: ["C#", "E", "G#", "B"] },
-        { name: "D Minor7", notes: ["D", "F", "A", "C"] },
-        { name: "D# Minor7", notes: ["D#", "F#", "A#", "C#"] },
-        { name: "E Minor7", notes: ["E", "G", "B", "D"] },
-        { name: "F Minor7", notes: ["F", "G#", "C", "D#"] },
-        { name: "F# Minor7", notes: ["F#", "A", "C#", "E"] },
-        { name: "G Minor7", notes: ["G", "A#", "D", "F"] },
-        { name: "G# Minor7", notes: ["G#", "B", "D#", "F#"] },
-        { name: "A Minor7", notes: ["A", "C", "E", "G"] },
-        { name: "A# Minor7", notes: ["A#", "C#", "F", "G#"] },
-        { name: "B Minor7", notes: ["B", "D", "F#", "A"] },
-      ];
-
-   
-
-      var audioElement = document.createElement("audio");
-
-      $("#button").click(function () {
-        let _this = $(this);
-        let text_chord = $("#chord");
-        let text_seconds = $("#seconds");
-        let text_notes = $("#notes");
-        let select_seconds = parseInt($("#select_seconds").val());
-        chords_array = [];
-
-        $.each($(".chords"), function (key, item) {
-          if ($(item).is(":checked")) {
-            chords_array.push(...window[$(item).attr("id")]);
-          }
-        });
-
-        if (chords_array.length == 0) {
-          alert("No chords have been selected.");
-          return false;
-        }
-
-        if (!_status) {
-          $("#select_seconds, .chords").prop("disabled", true);
-          let select_chord = randChords();
-          document.getElementById("chord").style.color = "black";
-          var _start = false;
-          _status = true;
-          $(_this).attr("role", "stop").text("Stop");
-          seconds = select_seconds;
-
-          _invertal_seconds = setInterval(function () {
-            $(text_chord).text(select_chord.name);
-            $(text_notes).text(`(${select_chord.notes.join(', ')})`);
-            if (seconds == 0) {
-              seconds = select_seconds;
-            } else if (seconds == select_seconds) {
-             playChord(select_chord.name);
+        createApp({
+          data() {
+            return {
+              numberOfKeys: 49,
+              startMidiNote: null,
+              keyboardKeys: [],
+              keyboardHeight: 0,
+              pressedMidiNotes: new Map(),
+              audioContext: null,
+              midiAccess: null,
+              detectedChord: '',
+              midiStatus: { connected: false, message: 'Not Ready' },
+              Tonal: Tonal,
+              isInitialized: false,
+              isCalibrated: false,
+              calibrationMessage: 'Please select a MIDI device to calibrate.',
+              midiInputs: [],
+              selectedMidiInputId: null,
+              resizeTimeout: null,
+              isGameRunning: false,
+              gameTimerId: null,
+              gameDuration: 5,
+              gameCountdown: 5,
+              targetChord: '',
+              chordTypeSelection: { M: true, m: true, maj7: false, m7: false },
+              userChordStatus: 'neutral', // 'neutral', 'correct', 'incorrect'
+              notationPreference: 'flats', // 'flats' or 'sharps'
+              rootNotesSharps: ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'],
+              rootNotesFlats: ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'],
             }
-
-            $(text_seconds).text(seconds);
-            seconds -= 1;
-
-            if (!_start) {
-              _start = true;
-              _invertal_chord = setInterval(function () {
-                select_chord = randChords();
-                document.getElementById("chord").style.color = "black";
-                $(text_chord).text(select_chord.name);
-                $(text_notes).text(`(${select_chord.notes.join(', ')})`);
-                playChord(select_chord.name);
-              }, select_seconds * 1000);
+          },
+          computed: {
+            userChordColorClass() {
+              switch (this.userChordStatus) {
+                case 'correct':
+                  return 'text-green-400'
+                case 'incorrect':
+                  return 'text-red-400'
+                default:
+                  return 'text-sky-300'
+              }
+            },
+            useSharps() {
+                return this.notationPreference === 'sharps';
             }
-          }, 1000);
-        } else {
-          _status = false;
-          seconds = 0;
-          $(text_chord).text("Random Chord");
-          $(text_notes).text("");
-          $(text_seconds).text(seconds);
-          $(_this).attr("role", "start").text("Start");
-          $("#select_seconds, .chords").prop("disabled", false);
-          clearInterval(_invertal_chord);
-          clearInterval(_invertal_seconds);
-        }
-      });
+          },
+          methods: {
+            async start() {
+              const audioReady = await this.initAudio()
+              if (!audioReady) {
+                console.error('Audio engine failed to initialize, aborting start.')
+                return
+              }
+              this.isInitialized = true
+              this.$nextTick(() => {
+                this.generateKeyboard()
+                this.connectToSelectedDevice()
+              })
+            },
+            initAudio() {
+              return new Promise(async (resolve) => {
+                try {
+                  if (this.audioContext && this.audioContext.state === 'running') {
+                    resolve(true)
+                    return
+                  }
+                  this.audioContext = new (window.AudioContext || window.webkitAudioContext)()
+                  if (this.audioContext.state === 'suspended') {
+                    await this.audioContext.resume()
+                  }
+                  console.log(
+                    'Web Audio API engine started successfully. Status:',
+                    this.audioContext.state,
+                  )
+                  resolve(true)
+                } catch (e) {
+                  console.error('Error in initAudio:', e)
+                  this.midiStatus.message = `Error: Could not initialize audio engine. (${e.name})`
+                  this.isInitialized = false
+                  resolve(false)
+                }
+              })
+            },
+            async initMidi() {
+              if (!navigator.requestMIDIAccess) {
+                this.midiStatus = {
+                  connected: false,
+                  message: 'Your browser does not support the Web MIDI API.',
+                }
+                return
+              }
+              try {
+                this.midiAccess = await navigator.requestMIDIAccess()
+                this.midiInputs = Array.from(this.midiAccess.inputs.values())
+                if (this.midiInputs.length > 0) {
+                  this.midiStatus = { connected: false, message: 'Please select a MIDI device.' }
+                } else {
+                  this.midiStatus = { connected: false, message: 'No MIDI device found.' }
+                }
+                this.midiAccess.onstatechange = (event) => {
+                  this.midiInputs = Array.from(this.midiAccess.inputs.values())
+                  if (
+                    this.selectedMidiInputId &&
+                    !this.midiInputs.find((i) => i.id === this.selectedMidiInputId)
+                  ) {
+                    this.midiStatus.connected = false
+                    this.midiStatus.message = 'The connected MIDI device was removed.'
+                    this.isInitialized = false
+                    this.isCalibrated = false
+                    this.selectedMidiInputId = null
+                    this.calibrationMessage = 'Please select a MIDI device to calibrate.'
+                    this.stopGame()
+                  }
+                }
+              } catch (error) {
+                console.error('MIDI access error:', error)
+                this.midiStatus = { connected: false, message: 'MIDI access was denied.' }
+              }
+            },
+            onDeviceSelected() {
+              if (!this.selectedMidiInputId || !this.midiAccess) return
+              this.isCalibrated = false
+              this.calibrationMessage =
+                'Please press the LOWEST (left-most) key on your keyboard...'
+              this.midiAccess.inputs.forEach((input) => {
+                input.onmidimessage = null
+              })
+              const selectedInput = this.midiAccess.inputs.get(this.selectedMidiInputId)
+              if (selectedInput) {
+                selectedInput.onmidimessage = (event) => {
+                  const [command, midiNote, velocity] = event.data
+                  if (command === 144 && velocity > 0) {
+                    this.startMidiNote = midiNote
+                    this.isCalibrated = true
+                    const noteName = this.Tonal.Midi.midiToNoteName(this.startMidiNote, { sharps: this.useSharps })
+                    this.calibrationMessage = `Calibration complete! Starting note: ${noteName} (${this.startMidiNote})`
+                    selectedInput.onmidimessage = null
+                  }
+                }
+              }
+            },
+            connectToSelectedDevice() {
+              if (!this.selectedMidiInputId || !this.midiAccess) return
+              this.midiAccess.inputs.forEach((input) => {
+                input.onmidimessage = null
+              })
+              const selectedInput = this.midiAccess.inputs.get(this.selectedMidiInputId)
+              if (selectedInput) {
+                selectedInput.onmidimessage = this.onMIDIMessage
+                this.midiStatus = { connected: true, message: `Connected: ${selectedInput.name}` }
+              }
+            },
+            onMIDIMessage(event) {
+              const [command, midiNote, velocity] = event.data
+              if (command === 144 && velocity > 0) {
+                this.pressKey(midiNote, velocity)
+              } else if (command === 128 || (command === 144 && velocity === 0)) {
+                this.releaseKey(midiNote)
+              }
+            },
+            generateKeyboard() {
+              if (!this.$refs.keyboardWrapper) return
+              const keys = []
+              let whiteKeyCount = 0
+              for (let i = 0; i < this.numberOfKeys; i++) {
+                const midi = this.startMidiNote + i
+                const noteName = this.Tonal.Midi.midiToNoteName(midi, { sharps: this.useSharps })
+                if (!noteName.includes('#') && !noteName.includes('b')) {
+                  whiteKeyCount++
+                }
+              }
+              const containerWidth = this.$refs.keyboardWrapper.clientWidth - 32
+              const whiteKeyWidth = containerWidth / whiteKeyCount
+              const whiteKeyHeight = whiteKeyWidth * 4
+              const blackKeyWidth = whiteKeyWidth * 0.6
+              const blackKeyHeight = whiteKeyHeight * 0.6
+              this.keyboardHeight = whiteKeyHeight
+              let whiteKeyIndex = 0
+              for (let i = 0; i < this.numberOfKeys; i++) {
+                const midi = this.startMidiNote + i
+                const noteName = this.Tonal.Midi.midiToNoteName(midi, { sharps: this.useSharps })
+                const isBlack = noteName.includes('#') || noteName.includes('b')
+                const keyData = {
+                  midi,
+                  note: noteName,
+                  type: isBlack ? 'black' : 'white',
+                  isPressed: false,
+                  styleObject: {},
+                }
+                if (isBlack) {
+                  keyData.styleObject = {
+                    width: `${blackKeyWidth}px`,
+                    height: `${blackKeyHeight}px`,
+                    left: `${whiteKeyIndex * whiteKeyWidth - blackKeyWidth / 2}px`,
+                  }
+                } else {
+                  keyData.styleObject = {
+                    width: `${whiteKeyWidth}px`,
+                    height: `${whiteKeyHeight}px`,
+                    left: `${whiteKeyIndex * whiteKeyWidth}px`,
+                  }
+                  whiteKeyIndex++
+                }
+                keys.push(keyData)
+              }
+              this.keyboardKeys = keys
+            },
+            pressKey(midiNote, velocity = 100) {
+              if (!this.audioContext || this.audioContext.state !== 'running') return
+              if (this.pressedMidiNotes.has(midiNote)) this.releaseKey(midiNote, true)
+              const oscillator = this.audioContext.createOscillator()
+              const gainNode = this.audioContext.createGain()
+              oscillator.connect(gainNode)
+              gainNode.connect(this.audioContext.destination)
+              oscillator.type = 'sine'
+              oscillator.frequency.value = this.Tonal.Midi.midiToFreq(midiNote)
+              const normalizedVelocity = velocity / 127
+              gainNode.gain.setValueAtTime(normalizedVelocity, this.audioContext.currentTime)
+              oscillator.start()
+              this.pressedMidiNotes.set(midiNote, { oscillator, gainNode })
+              const key = this.keyboardKeys.find((k) => k.midi === midiNote)
+              if (key) key.isPressed = true
+              this.detectChord()
+            },
+            releaseKey(midiNote, isRetrigger = false) {
+              if (this.pressedMidiNotes.has(midiNote)) {
+                const { oscillator, gainNode } = this.pressedMidiNotes.get(midiNote)
+                const releaseTime = 0.5
+                gainNode.gain.setValueAtTime(gainNode.gain.value, this.audioContext.currentTime)
+                gainNode.gain.linearRampToValueAtTime(
+                  0,
+                  this.audioContext.currentTime + releaseTime,
+                )
+                oscillator.stop(this.audioContext.currentTime + releaseTime)
+                this.pressedMidiNotes.delete(midiNote)
+              }
+              if (isRetrigger) return
+              const key = this.keyboardKeys.find((k) => k.midi === midiNote)
+              if (key) key.isPressed = false
+              this.detectChord()
+            },
+            detectChord() {
+              const midiNotes = Array.from(this.pressedMidiNotes.keys());
+              
+              if (midiNotes.length >= 3) {
+                  midiNotes.sort((a, b) => a - b);
+                  const notes = midiNotes.map((midi) =>
+                      this.Tonal.Midi.midiToNoteName(midi, { pitchClass: true, sharps: this.useSharps })
+                  );
+                  const chords = this.Tonal.Chord.detect(notes);
+                  this.detectedChord = chords.length > 0 ? chords[0] : '';
+              } else {
+                  this.detectedChord = '';
+              }
 
-      function randChords() {
-        var random_index = Math.floor(Math.random() * chords_array.length + 0);
-        let select_rand = chords_array[random_index];
-        while (random_chord == select_rand) {
-          var random_index = Math.floor(Math.random() * chords_array.length + 0);
-          select_rand = chords_array[random_index];
-        }
-        random_chord = select_rand;
-        return random_chord;
-      }
+              if (this.isGameRunning) {
+                  const targetChordInfo = this.Tonal.Chord.get(this.targetChord);
 
-      function playChord(name){
-        name = escape(name);
-        audioElement.setAttribute(
-                "src",
-                "./assets/media/chords/" + name + ".mp3"
-              );
-              audioElement.play();
-      }
+    
+                  if (targetChordInfo.empty) {
+                      this.userChordStatus = 'neutral';
+                      return;
+                  }
+                  
+                  if (midiNotes.length !== targetChordInfo.notes.length) {
+                      this.userChordStatus = midiNotes.length > 0 ? 'incorrect' : 'neutral';
+                      return;
+                  }
+
+                  const playedChromaSet = new Set(midiNotes.map(midi => midi % 12));
+                  const targetChromaSet = new Set(targetChordInfo.notes.map(note => this.Tonal.Note.chroma(note)));
+                  const isEqual = [...playedChromaSet].every(value => targetChromaSet.has(value));
+
+                  this.userChordStatus = isEqual ? 'correct' : 'incorrect';
+              } else {
+                  this.userChordStatus = 'neutral';
+              }
+            },
+            handleResize() {
+              clearTimeout(this.resizeTimeout)
+              this.resizeTimeout = setTimeout(() => {
+                if (this.isInitialized) this.generateKeyboard()
+              }, 150)
+            },
+            async playNoteFromClick(midiNote, velocity) {
+              if (!this.audioContext || this.audioContext.state !== 'running') {
+                const audioReady = await this.initAudio()
+                if (audioReady) this.pressKey(midiNote, velocity)
+              } else {
+                this.pressKey(midiNote, velocity)
+              }
+            },
+            stopNoteFromClick(midiNote) {
+              if (this.pressedMidiNotes.has(midiNote)) this.releaseKey(midiNote)
+            },
+            // --- Training Methods ---
+            toggleGame() {
+              this.isGameRunning ? this.stopGame() : this.startGame()
+            },
+            startGame() {
+              const availableTypes = Object.keys(this.chordTypeSelection).filter(
+                (type) => this.chordTypeSelection[type],
+              )
+              if (availableTypes.length === 0) {
+                alert('Please select at least one chord type.')
+                return
+              }
+              this.isGameRunning = true
+              this.gameCountdown = this.gameDuration
+              this.nextChord()
+              this.gameTimerId = setInterval(this.gameLoop, 1000)
+            },
+            stopGame() {
+              this.isGameRunning = false
+              clearInterval(this.gameTimerId)
+              this.targetChord = ''
+              this.userChordStatus = 'neutral'
+            },
+            gameLoop() {
+              this.gameCountdown--
+              if (this.gameCountdown <= 0) {
+                this.nextChord()
+                this.gameCountdown = this.gameDuration
+              }
+            },
+            nextChord() {
+                const availableTypes = Object.keys(this.chordTypeSelection).filter(
+                    (type) => this.chordTypeSelection[type]
+                );
+                const rootNotes = this.useSharps ? this.rootNotesSharps : this.rootNotesFlats;
+                const totalOptions = availableTypes.length * rootNotes.length;
+
+                if (totalOptions <= 1) {
+                    const randomRoot = rootNotes[Math.floor(Math.random() * rootNotes.length)];
+                    const randomType = availableTypes[Math.floor(Math.random() * availableTypes.length)];
+                    this.targetChord = randomRoot + randomType;
+                } else {
+                    let newChord = '';
+                    do {
+                        const randomRoot = rootNotes[Math.floor(Math.random() * rootNotes.length)];
+                        const randomType = availableTypes[Math.floor(Math.random() * availableTypes.length)];
+                        newChord = randomRoot + randomType;
+                    } while (newChord === this.targetChord);
+                    this.targetChord = newChord;
+                }
+
+                this.userChordStatus = 'neutral';
+                this.detectChord();
+            },
+          },
+          watch: {
+            notationPreference() {
+                if (this.isInitialized) {
+                    this.generateKeyboard();
+                }
+            }
+          },
+          mounted() {
+            this.initMidi()
+            window.addEventListener('resize', this.handleResize)
+          },
+          beforeUnmount() {
+            window.removeEventListener('resize', this.handleResize)
+            this.stopGame()
+          },
+        }).mount('#app')
+      })
     </script>
-    <script src="./assets/js/app.js"></script>
   </body>
 </html>
+
+

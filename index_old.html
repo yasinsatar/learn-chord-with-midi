@@ -1,0 +1,280 @@
+<html>
+  <hename>
+    <meta charset="UTF-8" />
+    <title>Learn Chord with MIDI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="./assets/css/bootstrap.min.css" />
+    <link rel="icon" type="image/x-icon" href="./assets/media/favicon.ico" />
+    <style>
+      @font-face {
+        font-family: "Main Font";
+        src: url("./assets/fonts/Louis\ George\ Cafe\ Bold.ttf")
+          format("truetype");
+      }
+
+      #main {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+      }
+
+      #chord {
+        font-size: 5rem;
+      }
+
+      #notes{
+        font-size: 2rem;
+      }
+
+      #button {
+        color: white;
+      }
+
+      #button[role="start"] {
+        background-color: #157347;
+        border-color: #157347;
+      }
+
+      #button[role="stop"] {
+        background-color: #bb2d3b;
+        border-color: #bb2d3b;
+      }
+
+      #active_notes {
+        display: block;
+        height: 25px;
+      }
+
+      @media screen and (max-width: 768px) {
+        .capsule-chords {
+          margin: auto;
+          display: inline-grid;
+        }
+        .chords-group {
+          display: block;
+          text-align: left;
+        }
+      }
+    </style>
+  </hename>
+
+  <body>
+    <div id="main" class="w-100 text-center">
+      <div class="col-12">
+        <div class="w-100 text-center d-inline-block mb-5">
+          <span>MIDI: </span
+          ><span id="device" class="fw-bold"
+            >Please press any key in midi keyboard</span
+          >
+        </div>
+        <div class="capsule-chords mb-3">
+          <div class="chords-group d-inline-block pe-lg-5">
+            <div class="chord-group">
+              <input type="checkbox" id="chords_M" class="chords" />
+              <label for="chords_M">Major acords included</label>
+            </div>
+            <div class="chord-group">
+              <input type="checkbox" id="chords_m" class="chords" />
+              <label for="chords_m">minör acords included</label>
+            </div>
+          </div>
+          <div class="chords-group d-inline-block">
+            <div class="chord-group">
+              <input type="checkbox" id="chords_Maj7" class="chords" />
+              <label for="chords_Maj7">Maj7 acords included</label>
+            </div>
+            <div class="chord-group">
+              <input type="checkbox" id="chords_m7" class="chords" />
+              <label for="chords_m7">min7 acords included</label>
+            </div>
+          </div>
+        </div>
+        <div class="d-block">
+        <h1 id="chord" class="w-100 d-inline mb-3">Random Chord</h1>
+        <span id="notes" class="d-inline"></span>
+        </div>
+        <div class="d-block my-2">Pressed Notes: <span id="active_notes" class="d-inline"></span></div>
+        <div class="w-100 d-block">
+          <div class="w-100 mb-3">
+            <select id="select_seconds" class="border">
+              <option value="1">1 Second</option>
+              <option value="2">2 Second</option>
+              <option value="3">3 Second</option>
+              <option value="4">4 Second</option>
+              <option value="5">5 Second</option>
+              <option value="6">6 Second</option>
+              <option value="7">7 Second</option>
+              <option value="8">8 Second</option>
+              <option value="9">9 Second</option>
+              <option value="10">10 Second</option>
+            </select>
+            <span>:</span>
+            <span id="seconds">0</span>
+          </div>
+        </div>
+        <div class="btn" id="button" role="start">Start</div>
+      </div>
+    </div>
+
+    <script src="./assets/js/jquery-3.6.0.min.js"></script>
+    <script src="./assets/js/bootstrap.min.js"></script>
+    <script>
+      var _status = false,
+        seconds = 0,
+        seconds_max = 0;
+      var _invertal_chord, _invertal_seconds;
+
+      var random_chord =  { name: "", notes: [] };
+      var chords_array = [];
+      
+      var chords_M = [
+        { name: "C Major", notes: ["C", "E", "G"] },
+        { name: "C# Major", notes: ["C#", "F", "G#"] },
+        { name: "D Major", notes: ["D", "F#", "A"] },
+        { name: "D# Major", notes: ["D#", "G", "A#"] },
+        { name: "E Major", notes: ["E", "G#", "B"] },
+        { name: "F Major", notes: ["F", "A", "C"] },
+        { name: "F# Major", notes: ["F#", "A#", "C#"] },
+        { name: "G Major", notes: ["G", "B", "D"] },
+        { name: "G# Major", notes: ["G#", "C", "D#"] },
+        { name: "A Major", notes: ["A", "C#", "E"] },
+        { name: "A# Major", notes: ["A#", "D", "F"] },
+        { name: "B Major", notes: ["B", "D#", "F#"] },
+      ];
+
+      var chords_m = [
+        { name: "C Minor", notes: ["C", "D#", "G"] },
+        { name: "C# Minor", notes: ["C#", "E", "G#"] },
+        { name: "D Minor", notes: ["D", "F", "A"] },
+        { name: "D# Minor", notes: ["D#", "F#", "A#"] },
+        { name: "E Minor", notes: ["E", "G", "B"] },
+        { name: "F Minor", notes: ["F", "G#", "C"] },
+        { name: "F# Minor", notes: ["F#", "A", "C#"] },
+        { name: "G Minor", notes: ["G", "A#", "D"] },
+        { name: "G# Minor", notes: ["G#", "B", "D#"] },
+        { name: "A Minor", notes: ["A", "C", "E"] },
+        { name: "A# Minor", notes: ["A#", "C#", "F"] },
+        { name: "B Minor", notes: ["B", "D", "F#"] },
+      ];
+
+      var chords_Maj7 = [
+        { name: "C Major7", notes: ["C", "E", "G", "B"] },
+        { name: "C# Major7", notes: ["C#", "F", "G#", "C"] },
+        { name: "D Major7", notes: ["D", "F#", "A", "C#"] },
+        { name: "D# Major7", notes: ["D#", "G", "A#", "D"] },
+        { name: "E Major7", notes: ["E", "G#", "B", "D#"] },
+        { name: "F Major7", notes: ["F", "A", "C", "E"] },
+        { name: "F# Major7", notes: ["F#", "A#", "C#", "F"] },
+        { name: "G Major7", notes: ["G", "B", "D", "F#"] },
+        { name: "G# Major7", notes: ["G#", "C", "D#", "G"] },
+        { name: "A Major7", notes: ["A", "C#", "E", "G#"] },
+        { name: "A# Major7", notes: ["A#", "D", "F", "A"] },
+        { name: "B Major7", notes: ["B", "D#", "F#", "A#"] },
+      ];
+
+      var chords_m7 = [
+        { name: "C Minor7", notes: ["C", "D#", "G", "A#"] },
+        { name: "C# Minor7", notes: ["C#", "E", "G#", "B"] },
+        { name: "D Minor7", notes: ["D", "F", "A", "C"] },
+        { name: "D# Minor7", notes: ["D#", "F#", "A#", "C#"] },
+        { name: "E Minor7", notes: ["E", "G", "B", "D"] },
+        { name: "F Minor7", notes: ["F", "G#", "C", "D#"] },
+        { name: "F# Minor7", notes: ["F#", "A", "C#", "E"] },
+        { name: "G Minor7", notes: ["G", "A#", "D", "F"] },
+        { name: "G# Minor7", notes: ["G#", "B", "D#", "F#"] },
+        { name: "A Minor7", notes: ["A", "C", "E", "G"] },
+        { name: "A# Minor7", notes: ["A#", "C#", "F", "G#"] },
+        { name: "B Minor7", notes: ["B", "D", "F#", "A"] },
+      ];
+
+   
+
+      var audioElement = document.createElement("audio");
+
+      $("#button").click(function () {
+        let _this = $(this);
+        let text_chord = $("#chord");
+        let text_seconds = $("#seconds");
+        let text_notes = $("#notes");
+        let select_seconds = parseInt($("#select_seconds").val());
+        chords_array = [];
+
+        $.each($(".chords"), function (key, item) {
+          if ($(item).is(":checked")) {
+            chords_array.push(...window[$(item).attr("id")]);
+          }
+        });
+
+        if (chords_array.length == 0) {
+          alert("No chords have been selected.");
+          return false;
+        }
+
+        if (!_status) {
+          $("#select_seconds, .chords").prop("disabled", true);
+          let select_chord = randChords();
+          document.getElementById("chord").style.color = "black";
+          var _start = false;
+          _status = true;
+          $(_this).attr("role", "stop").text("Stop");
+          seconds = select_seconds;
+
+          _invertal_seconds = setInterval(function () {
+            $(text_chord).text(select_chord.name);
+            $(text_notes).text(`(${select_chord.notes.join(', ')})`);
+            if (seconds == 0) {
+              seconds = select_seconds;
+            } else if (seconds == select_seconds) {
+             playChord(select_chord.name);
+            }
+
+            $(text_seconds).text(seconds);
+            seconds -= 1;
+
+            if (!_start) {
+              _start = true;
+              _invertal_chord = setInterval(function () {
+                select_chord = randChords();
+                document.getElementById("chord").style.color = "black";
+                $(text_chord).text(select_chord.name);
+                $(text_notes).text(`(${select_chord.notes.join(', ')})`);
+                playChord(select_chord.name);
+              }, select_seconds * 1000);
+            }
+          }, 1000);
+        } else {
+          _status = false;
+          seconds = 0;
+          $(text_chord).text("Random Chord");
+          $(text_notes).text("");
+          $(text_seconds).text(seconds);
+          $(_this).attr("role", "start").text("Start");
+          $("#select_seconds, .chords").prop("disabled", false);
+          clearInterval(_invertal_chord);
+          clearInterval(_invertal_seconds);
+        }
+      });
+
+      function randChords() {
+        var random_index = Math.floor(Math.random() * chords_array.length + 0);
+        let select_rand = chords_array[random_index];
+        while (random_chord == select_rand) {
+          var random_index = Math.floor(Math.random() * chords_array.length + 0);
+          select_rand = chords_array[random_index];
+        }
+        random_chord = select_rand;
+        return random_chord;
+      }
+
+      function playChord(name){
+        name = escape(name);
+        audioElement.setAttribute(
+                "src",
+                "./assets/media/chords/" + name + ".mp3"
+              );
+              audioElement.play();
+      }
+    </script>
+    <script src="./assets/js/app.js"></script>
+  </body>
+</html>
